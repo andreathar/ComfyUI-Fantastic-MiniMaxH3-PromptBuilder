@@ -3866,6 +3866,55 @@ export function openStackModal(node, { onClose } = {}) {
 /* -------------------------------------------------------- register */
 
 app.registerExtension({
+  name: "MiniMaxH3.RefModCreateSources",
+  beforeRegisterNodeDef(nodeType, nodeData) {
+    if (nodeData.name !== CREATE_NAME) return;
+    const prev = nodeType.prototype.onNodeCreated;
+    nodeType.prototype.onNodeCreated = function () {
+      const r = prev?.apply(this, arguments);
+      const source = this.widgets.find((w) => w.name === "source");
+      let uploading = false;
+      source.serializeValue = () => {
+        if (uploading) throw new Error("Wait for RefMod source uploads to finish before saving or queueing.");
+        return source.value;
+      };
+      const picker = document.createElement("input");
+      picker.type = "file";
+      picker.multiple = true;
+      picker.accept = "image/*,video/*,audio/*";
+      const button = this.addWidget("button", "Choose source media…", null, () => picker.click(), { serialize: false });
+      picker.onchange = async () => {
+        if (!picker.files.length) return;
+        button.disabled = true;
+        uploading = true;
+        try {
+          const items = [];
+          for (const file of picker.files) {
+            const body = new FormData();
+            body.append("file", file, file.name);
+            const resp = await postApi("/minimax_h3/upload", { body });
+            const info = await resp.json();
+            if (!resp.ok) throw new Error(info.error || `Upload failed (${resp.status})`);
+            items.push({ ...info, name: info.original || info.name,
+              audio_mode: info.has_audio ? "paired" : "off" });
+          }
+          source.value = JSON.stringify(items);
+          source.callback?.(source.value);
+          this.setDirtyCanvas(true, true);
+        } catch (err) {
+          alert(`Could not select RefMod sources: ${err.message}`);
+        } finally {
+          picker.value = "";
+          uploading = false;
+          button.disabled = false;
+        }
+      };
+      return r;
+    };
+  },
+});
+
+app.registerExtension({
   name: "MiniMaxH3.RefModLibraryFromLoader",
   beforeRegisterNodeDef(nodeType, nodeData) {
     if (nodeData.name !== LOADER_NAME) return;

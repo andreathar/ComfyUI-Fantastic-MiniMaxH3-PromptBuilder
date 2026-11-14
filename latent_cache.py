@@ -54,10 +54,10 @@ def vae_tag(vae):
 
 
 def file_stamp(annotated):
-    """A file as its name, size and modification time: a changed file is a new key."""
+    """Resolved path, size and nanosecond mtime; this is not a content hash."""
     path = media_io.resolve(annotated)
     st = os.stat(path)
-    return [os.path.basename(path), st.st_size, int(st.st_mtime)]
+    return [os.path.normcase(os.path.realpath(path)), st.st_size, st.st_mtime_ns]
 
 
 def path_for(kind, key):
